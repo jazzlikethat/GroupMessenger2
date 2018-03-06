@@ -2,9 +2,18 @@ package edu.buffalo.cse.cse486586.groupmessenger2;
 
 import android.content.ContentProvider;
 import android.content.ContentValues;
+import android.content.Context;
 import android.database.Cursor;
+import android.database.MatrixCursor;
 import android.net.Uri;
 import android.util.Log;
+
+import java.io.BufferedReader;
+import java.io.FileInputStream;
+import java.io.FileOutputStream;
+import java.io.InputStreamReader;
+
+import static edu.buffalo.cse.cse486586.groupmessenger2.GroupMessengerActivity.TAG;
 
 /**
  * GroupMessengerProvider is a key-value table. Once again, please note that we do not implement
@@ -25,6 +34,9 @@ import android.util.Log;
  *
  */
 public class GroupMessengerProvider extends ContentProvider {
+
+    private static final String KEY_FIELD = "key";
+    private static final String VALUE_FIELD = "value";
 
     @Override
     public int delete(Uri uri, String selection, String[] selectionArgs) {
@@ -50,7 +62,19 @@ public class GroupMessengerProvider extends ContentProvider {
          * internal storage option that we used in PA1. If you want to use that option, please
          * take a look at the code for PA1.
          */
-        Log.v("insert", values.toString());
+
+        String filename = values.getAsString(KEY_FIELD);
+        String content =  values.getAsString(VALUE_FIELD) + "\n";
+        FileOutputStream outputStream;
+
+        try {
+            outputStream = getContext().openFileOutput(filename, Context.MODE_PRIVATE);
+            outputStream.write(content.getBytes());
+            outputStream.close();
+        } catch (Exception e) {
+            Log.d(TAG, "File write failed");
+        }
+
         return uri;
     }
 
@@ -80,7 +104,18 @@ public class GroupMessengerProvider extends ContentProvider {
          * recommend building a MatrixCursor described at:
          * http://developer.android.com/reference/android/database/MatrixCursor.html
          */
-        Log.v("query", selection);
+        try {
+            FileInputStream fileInputStream = getContext().openFileInput(selection);
+            BufferedReader bufferedReader = new BufferedReader(new InputStreamReader(fileInputStream));
+            String content = bufferedReader.readLine();
+            MatrixCursor cursor = new MatrixCursor(new String[]{KEY_FIELD, VALUE_FIELD});
+            cursor.addRow(new String[] {selection, content});
+            return cursor;
+        } catch (Exception e) {
+            Log.d(TAG, "File name failed "+selection);
+            Log.d(TAG, "Reading file failed "+ e.getLocalizedMessage());
+        }
+
         return null;
     }
 }
