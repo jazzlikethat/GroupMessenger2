@@ -19,6 +19,7 @@ import java.io.InputStream;
 import java.io.InputStreamReader;
 import java.io.OutputStream;
 import java.io.OutputStreamWriter;
+import java.io.PrintWriter;
 import java.net.InetAddress;
 import java.net.ServerSocket;
 import java.net.Socket;
@@ -79,7 +80,6 @@ public class GroupMessengerActivity extends Activity implements View.OnClickList
         if(view.getId() == R.id.button4)
         {
             String msg = editText1.getText().toString();
-            Log.d(TAG,"Msg to send "+msg);
             editText1.setText(""); // This is one way to reset the input box.
             new ClientTask().executeOnExecutor(AsyncTask.SERIAL_EXECUTOR, msg);
         }
@@ -95,21 +95,21 @@ public class GroupMessengerActivity extends Activity implements View.OnClickList
     private class ServerTask extends AsyncTask<ServerSocket, String, Void> {
         @Override
         protected Void doInBackground(ServerSocket... sockets) {
-            Log.e(TAG, "in server task");
             ServerSocket serverSocket = sockets[0];
             String msgToSend;
 
             while (true) {
                 try {
                     Socket socket = serverSocket.accept();
-                    InputStream inputStream = socket.getInputStream();
-                    InputStreamReader inputStreamReader = new InputStreamReader(inputStream);
-                    BufferedReader bufferedReader = new BufferedReader(inputStreamReader);
-                    msgToSend = bufferedReader.readLine();
 
-                    publishProgress(msgToSend);
+                    BufferedReader in = new BufferedReader(new InputStreamReader(socket.getInputStream()));
+                    PrintWriter out = new PrintWriter(new BufferedWriter(new OutputStreamWriter(socket.getOutputStream())),true);
 
-                    bufferedReader.close();
+                    String str = in.readLine();
+                    out.println("hello");
+
+                    publishProgress(str);
+
                     socket.close();
                 }
                 catch (IOException e) {
@@ -130,8 +130,6 @@ public class GroupMessengerActivity extends Activity implements View.OnClickList
             textView.append(strReceived + "\n");
 
             String filename = Integer.toString(seqNum);
-
-            Log.d(TAG,"Server task msg received "+ strReceived);
 
             Uri uri = new Uri.Builder().authority("edu.buffalo.cse.cse486586.groupmessenger2.provider").scheme("content").build();
             ContentValues cv = new ContentValues();
@@ -155,12 +153,12 @@ public class GroupMessengerActivity extends Activity implements View.OnClickList
 
                     String msgToSend = msgs[0];
 
-                    OutputStream outputStream = socket.getOutputStream();
-                    BufferedWriter bufferedWriter = new BufferedWriter(new OutputStreamWriter(outputStream));
-                    bufferedWriter.write(msgToSend);
+                    PrintWriter out = new PrintWriter(new BufferedWriter(new OutputStreamWriter(socket.getOutputStream())),true);
+                    BufferedReader in = new BufferedReader(new InputStreamReader(socket.getInputStream()));
 
-                    bufferedWriter.flush();
-                    bufferedWriter.close();
+                    out.println(msgToSend);
+                    String str = in.readLine();
+
                     socket.close();
                 }
             } catch (UnknownHostException e) {
