@@ -25,6 +25,8 @@ import java.net.InetAddress;
 import java.net.ServerSocket;
 import java.net.Socket;
 import java.net.UnknownHostException;
+import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.PriorityQueue;
 import java.util.Queue;
 import java.util.UUID;
@@ -37,7 +39,8 @@ import java.util.UUID;
  */
 public class GroupMessengerActivity extends Activity implements View.OnClickListener {
     static final String TAG = GroupMessengerActivity.class.getSimpleName();
-    String[] REMOTE_PORTS = {"11108", "11112", "11116", "11120", "11124"};
+    ArrayList<String> REMOTE_PORTS = new ArrayList<String>(Arrays.asList("11108", "11112", "11116", "11120", "11124"));
+
     static final int SERVER_PORT = 10000;
     private EditText editText1;
     String myPort;
@@ -56,6 +59,7 @@ public class GroupMessengerActivity extends Activity implements View.OnClickList
         * status = 0 => message
         * status = 1 => proposal
         * status = 2 => agreement
+        * status = 3 => Details of failed port
         * */
 
         public Message(String msg, String ID, double proposal_number, int status) {
@@ -245,14 +249,15 @@ public class GroupMessengerActivity extends Activity implements View.OnClickList
         @Override
         protected Void doInBackground(String... msgs) {
 
+            int i = 0;
             try {
 
                 double proposal_numbers[] = new double[5];
                 String msgToSend = msgs[0];
 
-                for (int i = 0; i < REMOTE_PORTS.length; i++) {
+                for (i = 0; i < REMOTE_PORTS.size(); i++) {
                     Socket socket = new Socket(InetAddress.getByAddress(new byte[]{10, 0, 2, 2}),
-                            Integer.parseInt(REMOTE_PORTS[i]));
+                            Integer.parseInt(REMOTE_PORTS.get(i)));
 
                     PrintWriter out = new PrintWriter(new BufferedWriter(new OutputStreamWriter(socket.getOutputStream())),true);
                     BufferedReader in = new BufferedReader(new InputStreamReader(socket.getInputStream()));
@@ -280,9 +285,9 @@ public class GroupMessengerActivity extends Activity implements View.OnClickList
                 String agreedMessage = TextUtils.join("###", msg_split);
                 agreedMessage = agreedMessage +  "###" + Double.toString(max_pn);
 
-                for (int j = 0; j < REMOTE_PORTS.length; j++) {
+                for (int j = 0; j < REMOTE_PORTS.size(); j++) {
                     Socket socket2 = new Socket(InetAddress.getByAddress(new byte[]{10, 0, 2, 2}),
-                            Integer.parseInt(REMOTE_PORTS[j]));
+                            Integer.parseInt(REMOTE_PORTS.get(j)));
 
                     PrintWriter out = new PrintWriter(new BufferedWriter(new OutputStreamWriter(socket2.getOutputStream())),true);
                     out.println(agreedMessage);
@@ -293,9 +298,11 @@ public class GroupMessengerActivity extends Activity implements View.OnClickList
                 Log.e(TAG, "ClientTask UnknownHostException");
             }
             catch (IOException e) {
-                Log.e("Failed process", i);
-                e.printStackTrace();
-                Log.e(TAG, "ClientTask socket IOException");
+
+                String failed_port = REMOTE_PORTS.get(i);
+                REMOTE_PORTS.remove(i);
+                String msgToSend = failed_port + "###" + getUniqueId() + "###" + 3;
+                Log.d("so far", "working fine");
             }
 
             return null;
