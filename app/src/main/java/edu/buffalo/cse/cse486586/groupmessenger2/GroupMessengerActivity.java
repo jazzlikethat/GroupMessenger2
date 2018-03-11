@@ -6,7 +6,6 @@ import android.content.Context;
 import android.net.Uri;
 import android.os.AsyncTask;
 import android.os.Bundle;
-import android.os.MessageQueue;
 import android.telephony.TelephonyManager;
 import android.text.TextUtils;
 import android.text.method.ScrollingMovementMethod;
@@ -19,16 +18,13 @@ import android.widget.TextView;
 import java.io.BufferedReader;
 import java.io.BufferedWriter;
 import java.io.IOException;
-import java.io.InputStream;
 import java.io.InputStreamReader;
-import java.io.OutputStream;
 import java.io.OutputStreamWriter;
 import java.io.PrintWriter;
 import java.net.InetAddress;
 import java.net.ServerSocket;
 import java.net.Socket;
 import java.net.UnknownHostException;
-import java.util.Iterator;
 import java.util.PriorityQueue;
 import java.util.Queue;
 import java.util.UUID;
@@ -135,7 +131,7 @@ public class GroupMessengerActivity extends Activity implements View.OnClickList
     public void onClick(View view) {
         if(view.getId() == R.id.button4)
         {
-            String msg = editText1.getText().toString();
+            String msg = editText1.getText().toString().replaceAll("[\n\r]", "");
             msg = msg + "###" + getUniqueId() + "###" + 0;
             editText1.setText(""); // This is one way to reset the input box.
             new ClientTask().executeOnExecutor(AsyncTask.SERIAL_EXECUTOR, msg);
@@ -297,6 +293,7 @@ public class GroupMessengerActivity extends Activity implements View.OnClickList
                 Log.e(TAG, "ClientTask UnknownHostException");
             }
             catch (IOException e) {
+                Log.e("Failed process", i);
                 e.printStackTrace();
                 Log.e(TAG, "ClientTask socket IOException");
             }
