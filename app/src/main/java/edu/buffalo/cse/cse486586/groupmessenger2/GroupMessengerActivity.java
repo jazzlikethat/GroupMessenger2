@@ -27,6 +27,7 @@ import java.net.Socket;
 import java.net.UnknownHostException;
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.Iterator;
 import java.util.PriorityQueue;
 import java.util.Queue;
 import java.util.UUID;
@@ -52,6 +53,7 @@ public class GroupMessengerActivity extends Activity implements View.OnClickList
 
         private String msg;
         private String ID;
+        private String sender_port;
         private double proposal_number;
         private int status; // can be 0, 1 or 2
 
@@ -62,11 +64,12 @@ public class GroupMessengerActivity extends Activity implements View.OnClickList
         * status = 3 => Details of failed port
         * */
 
-        public Message(String msg, String ID, double proposal_number, int status) {
+        public Message(String msg, String ID, double proposal_number, int status, String sender_port) {
             this.msg             = msg;
             this.ID              = ID;
             this.proposal_number = proposal_number;
             this.status          = status;
+            this.sender_port     = sender_port;
         }
 
         @Override
@@ -136,7 +139,7 @@ public class GroupMessengerActivity extends Activity implements View.OnClickList
         if(view.getId() == R.id.button4)
         {
             String msg = editText1.getText().toString().replaceAll("[\n\r]", "");
-            msg = msg + "###" + getUniqueId() + "###" + 0;
+            msg = msg + "###" + getUniqueId() + "###" + 0 + "###" + myPort;
             editText1.setText(""); // This is one way to reset the input box.
             new ClientTask().executeOnExecutor(AsyncTask.SERIAL_EXECUTOR, msg);
         }
@@ -171,7 +174,8 @@ public class GroupMessengerActivity extends Activity implements View.OnClickList
                         int status = 1;
                         double proposal_number = Double.parseDouble(seqNum + "." + myPort);
                         seqNum++;
-                        message = new Message(str_split[0], str_split[1], proposal_number, status);
+                        String sender_port = str_split[3];
+                        message = new Message(str_split[0], str_split[1], proposal_number, status, sender_port);
                         messageQueue.add(message);
 
                         // Send the proposal number back to the queue
@@ -189,8 +193,9 @@ public class GroupMessengerActivity extends Activity implements View.OnClickList
 
                         // Add the new message into the queue with the correct proposal number
                         int status = 2;
-                        double proposal_number = Double.parseDouble(str_split[3]);
-                        message2 = new Message(str_split[0], str_split[1], proposal_number, status);
+                        double proposal_number = Double.parseDouble(str_split[4]);
+                        String sender_port = str_split[4];
+                        message2 = new Message(str_split[0], str_split[1], proposal_number, status, sender_port);
                         messageQueue.add(message2);
 
                         // Get the integer value from the proposal_number
@@ -204,10 +209,32 @@ public class GroupMessengerActivity extends Activity implements View.OnClickList
                         while (messageQueue.iterator().hasNext()){
                             message3 = messageQueue.peek();
                             if (message3 == null || message3.status != 2){
+                                Log.d(TAG, "doInBackground: " + message3.msg);
                                 break;
                             }
                             message3 = messageQueue.poll();
                             publishProgress(message3.msg);
+                        }
+                    }
+                    else if (Integer.parseInt(str_split[2]) == 3) {
+
+                        // Remove the failed_port from the list
+                        String failed_port = str_split[0];
+                        REMOTE_PORTS.remove(failed_port);
+                        Log.d(TAG, "it is removed now " + failed_port);
+
+                        // Remove the messages from queue which are received from failed port
+                        Queue<Message> tempQueue = new PriorityQueue<Message>();
+
+                        for (Message message4 : messageQueue) {
+                            if (message4.sender_port.equals(failed_port)) {
+                                tempQueue.add(message4);
+                            }
+                        }
+
+                        while (tempQueue.iterator().hasNext()) {
+                            Message tempMessage = tempQueue.iterator().next();
+                            messageQueue.remove(tempMessage);
                         }
                     }
 
@@ -244,16 +271,104 @@ public class GroupMessengerActivity extends Activity implements View.OnClickList
         }
     }
 
+    protected void handleIOException(String msgToSend, int i, double[] proposal_numbers) {
+        try {
+            // Send the failed_port details to the other ports
+            String failed_port = REMOTE_PORTS.get(i);
+            String failed_port_msg = failed_port + "###" + getUniqueId() + "###" + 3;
+
+            REMOTE_PORTS.remove(failed_port);
+
+            Log.d(TAG, "doInBackground: my port info: " + myPort);
+            for (int k = 0; k < REMOTE_PORTS.size(); k++) {
+
+                if (failed_port.equals(REMOTE_PORTS.get(k))) {
+                    continue;
+                }
+
+                Socket socket = new Socket(InetAddress.getByAddress(new byte[]{10, 0, 2, 2}),
+                        Integer.parseInt(REMOTE_PORTS.get(k)));
+
+                PrintWriter out = new PrintWriter(new BufferedWriter(new OutputStreamWriter(socket.getOutputStream())),true);
+                out.println(failed_port_msg);
+
+                Log.d(TAG, "failed port info sent to: " + REMOTE_PORTS.get(k));
+                socket.close();
+            }
+
+            Log.d(TAG, "Failed port details sent to all other processes");
+
+            // Send the earlier message to the rest of the ports
+            for (int l = i; l < REMOTE_PORTS.size(); l++) {
+
+                if (failed_port.equals(REMOTE_PORTS.get(l))) {
+                    continue;
+                }
+
+                Socket socket = new Socket(InetAddress.getByAddress(new byte[]{10, 0, 2, 2}),
+                        Integer.parseInt(REMOTE_PORTS.get(l)));
+
+                PrintWriter out = new PrintWriter(new BufferedWriter(new OutputStreamWriter(socket.getOutputStream())),true);
+                BufferedReader in = new BufferedReader(new InputStreamReader(socket.getInputStream()));
+
+                out.println(msgToSend);
+                String numberAsString = in.readLine();
+
+                socket.close();
+
+                double proposal_number = Double.parseDouble(numberAsString);
+                proposal_numbers[l] = proposal_number;
+            }
+
+            // Conclude the proposal number
+            double max_pn = proposal_numbers[0];
+            for (int m = 1; m < proposal_numbers.length; m++) {
+                if (max_pn < proposal_numbers[m]) {
+                    max_pn = proposal_numbers[m];
+                }
+            }
+
+            // Send the agreement with the proposal number
+            String msg_split[] = msgToSend.split("###");
+            msg_split[2] = "2";
+            String agreedMessage = TextUtils.join("###", msg_split);
+            agreedMessage = agreedMessage +  "###" + Double.toString(max_pn) + "###" + myPort;
+
+            for (int n = 0; n < REMOTE_PORTS.size(); n++) {
+
+                if (failed_port.equals(REMOTE_PORTS.get(n))) {
+                    continue; // Skip sending the agreement to the failed process
+                }
+
+                Socket socket = new Socket(InetAddress.getByAddress(new byte[]{10, 0, 2, 2}),
+                        Integer.parseInt(REMOTE_PORTS.get(n)));
+
+                PrintWriter out = new PrintWriter(new BufferedWriter(new OutputStreamWriter(socket.getOutputStream())),true);
+                out.println(agreedMessage);
+                socket.close();
+            }
+
+            Log.d(TAG, "Earlier message has been sent to the remaining processes");
+        }
+        catch (IOException e2){
+            Log.e(TAG, "Unable to multicast failed port details");
+        }
+    }
+
     private class ClientTask extends AsyncTask<String, Void, Void> {
 
         @Override
         protected Void doInBackground(String... msgs) {
 
             int i = 0;
+
+            double proposal_numbers[] = new double[5];
+
+            String msgToSend = "";
+
             try {
 
-                double proposal_numbers[] = new double[5];
-                String msgToSend = msgs[0];
+                msgToSend = msgs[0];
 
                 for (i = 0; i < REMOTE_PORTS.size(); i++) {
                     Socket socket = new Socket(InetAddress.getByAddress(new byte[]{10, 0, 2, 2}),
@@ -266,6 +381,12 @@ public class GroupMessengerActivity extends Activity implements View.OnClickList
                     String numberAsString = in.readLine();
 
                     socket.close();
+
+                    if (numberAsString == null) {
+                        Log.d(TAG, "doInBackground: null pointer exception " + REMOTE_PORTS.get(i));
+                        handleIOException(msgToSend, i, proposal_numbers);
+                        return null;
+                    }
 
                     double proposal_number = Double.parseDouble(numberAsString);
                     proposal_numbers[i] = proposal_number;
@@ -283,7 +404,7 @@ public class GroupMessengerActivity extends Activity implements View.OnClickList
                 String msg_split[] = msgToSend.split("###");
                 msg_split[2] = "2";
                 String agreedMessage = TextUtils.join("###", msg_split);
-                agreedMessage = agreedMessage +  "###" + Double.toString(max_pn);
+                agreedMessage = agreedMessage +  "###" + Double.toString(max_pn) + "###" + myPort;
 
                 for (int j = 0; j < REMOTE_PORTS.size(); j++) {
                     Socket socket2 = new Socket(InetAddress.getByAddress(new byte[]{10, 0, 2, 2}),
@@ -298,11 +419,8 @@ public class GroupMessengerActivity extends Activity implements View.OnClickList
                 Log.e(TAG, "ClientTask UnknownHostException");
             }
             catch (IOException e) {
-
-                String failed_port = REMOTE_PORTS.get(i);
-                REMOTE_PORTS.remove(i);
-                String msgToSend = failed_port + "###" + getUniqueId() + "###" + 3;
-                Log.d("so far", "working fine");
+                Log.d(TAG, "doInBackground: IO Exception");
+                handleIOException(msgToSend, i, proposal_numbers);
             }
 
             return null;
