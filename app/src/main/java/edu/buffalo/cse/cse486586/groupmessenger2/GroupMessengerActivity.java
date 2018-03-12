@@ -209,7 +209,7 @@ public class GroupMessengerActivity extends Activity implements View.OnClickList
                         while (messageQueue.iterator().hasNext()){
                             message3 = messageQueue.peek();
                             if (message3 == null || message3.status != 2){
-                                Log.d(TAG, "doInBackground: " + message3.msg);
+                                Log.d(TAG, "doInBackground: " + message3.msg + " " + message3.sender_port);
                                 break;
                             }
                             message3 = messageQueue.poll();
@@ -272,6 +272,8 @@ public class GroupMessengerActivity extends Activity implements View.OnClickList
     }
 
     protected void handleIOException(String msgToSend, int i, double[] proposal_numbers) {
+
+        Log.d(TAG,"handleIOException44444444444444" + proposal_numbers + " i = " + i);
         try {
             // Send the failed_port details to the other ports
             String failed_port = REMOTE_PORTS.get(i);
@@ -360,6 +362,7 @@ public class GroupMessengerActivity extends Activity implements View.OnClickList
         @Override
         protected Void doInBackground(String... msgs) {
 
+            Log.d(TAG,"ClientTask 11111111111111");
             int i = 0;
 
             double proposal_numbers[] = new double[5];
@@ -380,16 +383,31 @@ public class GroupMessengerActivity extends Activity implements View.OnClickList
                     out.println(msgToSend);
                     String numberAsString = in.readLine();
 
-                    socket.close();
+                    Log.d(TAG,"numberAsString 222222222222 >>> " +numberAsString + "<<<-----");
 
                     if (numberAsString == null) {
+
+                        Log.d(TAG,"numberAsString 3333333333");
+
                         Log.d(TAG, "doInBackground: null pointer exception " + REMOTE_PORTS.get(i));
                         handleIOException(msgToSend, i, proposal_numbers);
                         return null;
                     }
 
+                    Log.d(TAG,"proposal_number 666666666");
                     double proposal_number = Double.parseDouble(numberAsString);
                     proposal_numbers[i] = proposal_number;
+
+
+                    try {
+                        //if()
+
+
+                        socket.close();
+                    }catch(IOException e) {
+                        System.out.println(" socket.close :>>>>>>>>>" + e.getMessage());
+                    }
+
                 }
 
                 // Conclude the proposal number
@@ -416,9 +434,12 @@ public class GroupMessengerActivity extends Activity implements View.OnClickList
                 }
             }
             catch (UnknownHostException e) {
+                System.out.println("UnknownHostException >>>>>>> :" + e.getMessage());
+
                 Log.e(TAG, "ClientTask UnknownHostException");
             }
             catch (IOException e) {
+                System.out.println("IOException  >>>>>> :" + e.getMessage());
                 Log.d(TAG, "doInBackground: IO Exception");
                 handleIOException(msgToSend, i, proposal_numbers);
             }

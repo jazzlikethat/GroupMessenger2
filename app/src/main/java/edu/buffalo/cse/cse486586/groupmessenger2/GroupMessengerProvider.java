@@ -112,8 +112,8 @@ public class GroupMessengerProvider extends ContentProvider {
             cursor.addRow(new String[] {selection, content});
             return cursor;
         } catch (Exception e) {
-            Log.d(TAG, "File name failed "+selection);
-            Log.d(TAG, "Reading file failed "+ e.getLocalizedMessage());
+           // Log.d(TAG, "File name failed "+selection);
+            //Log.d(TAG, "Reading file failed "+ e.getLocalizedMessage());
         }
 
         return null;
