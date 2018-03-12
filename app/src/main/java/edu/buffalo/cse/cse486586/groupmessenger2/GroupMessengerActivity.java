@@ -47,6 +47,8 @@ public class GroupMessengerActivity extends Activity implements View.OnClickList
     String myPort;
     int seqNum = 1;
     int writeSequence = 0;
+    boolean force_closed = false;
+    String force_close_id = "-1";
     Queue<Message> messageQueue = new PriorityQueue<Message>();
 
     private static class Message implements Comparable<Message> {
@@ -209,7 +211,7 @@ public class GroupMessengerActivity extends Activity implements View.OnClickList
                         while (messageQueue.iterator().hasNext()){
                             message3 = messageQueue.peek();
                             if (message3 == null || message3.status != 2){
-                                Log.d(TAG, "doInBackground: " + message3.msg + " " + message3.sender_port);
+//                                Log.d(TAG, "doInBackground: " + message3.msg + " " + message3.sender_port);
                                 break;
                             }
                             message3 = messageQueue.poll();
@@ -220,21 +222,30 @@ public class GroupMessengerActivity extends Activity implements View.OnClickList
 
                         // Remove the failed_port from the list
                         String failed_port = str_split[0];
-                        REMOTE_PORTS.remove(failed_port);
-                        Log.d(TAG, "it is removed now " + failed_port);
+
+                        if (force_closed) {
+                            Log.d(TAG, "Already force closed with ID: " + force_close_id + "And Got ID as " + failed_port);
+                        }
+                        else {
+                            force_closed = true;
+                            force_close_id = failed_port;
+                        }
 
                         // Remove the messages from queue which are received from failed port
                         Queue<Message> tempQueue = new PriorityQueue<Message>();
 
                         for (Message message4 : messageQueue) {
                             if (message4.sender_port.equals(failed_port)) {
+                                Log.d(TAG, "Has a message from failed port: " + message4.msg);
                                 tempQueue.add(message4);
                             }
                         }
 
-                        while (tempQueue.iterator().hasNext()) {
-                            Message tempMessage = tempQueue.iterator().next();
-                            messageQueue.remove(tempMessage);
+                        Iterator itr = tempQueue.iterator();
+                        while (itr.hasNext()) {
+                            Message tempMessage = (Message) itr.next();
+                            boolean remove = messageQueue.remove(tempMessage);
+                            Log.d(TAG, "message removed with sender port " + tempMessage.sender_port + " " + remove);
                         }
                     }
 
@@ -273,13 +284,11 @@ public class GroupMessengerActivity extends Activity implements View.OnClickList
 
     protected void handleIOException(String msgToSend, int i, double[] proposal_numbers) {
 
-        Log.d(TAG,"handleIOException44444444444444" + proposal_numbers + " i = " + i);
         try {
             // Send the failed_port details to the other ports
             String failed_port = REMOTE_PORTS.get(i);
             String failed_port_msg = failed_port + "###" + getUniqueId() + "###" + 3;
 
-            REMOTE_PORTS.remove(failed_port);
 
             Log.d(TAG, "doInBackground: my port info: " + myPort);
             for (int k = 0; k < REMOTE_PORTS.size(); k++) {
@@ -362,7 +371,6 @@ public class GroupMessengerActivity extends Activity implements View.OnClickList
         @Override
         protected Void doInBackground(String... msgs) {
 
-            Log.d(TAG,"ClientTask 11111111111111");
             int i = 0;
 
             double proposal_numbers[] = new double[5];
@@ -374,39 +382,41 @@ public class GroupMessengerActivity extends Activity implements View.OnClickList
                 msgToSend = msgs[0];
 
                 for (i = 0; i < REMOTE_PORTS.size(); i++) {
+
+                    if (force_closed && force_close_id.equals(REMOTE_PORTS.get(i))) {
+                        continue;
+                    }
+
                     Socket socket = new Socket(InetAddress.getByAddress(new byte[]{10, 0, 2, 2}),
                             Integer.parseInt(REMOTE_PORTS.get(i)));
 
-                    PrintWriter out = new PrintWriter(new BufferedWriter(new OutputStreamWriter(socket.getOutputStream())),true);
-                    BufferedReader in = new BufferedReader(new InputStreamReader(socket.getInputStream()));
+                    PrintWriter out = null;
+                    BufferedReader in = null;
+                    String numberAsString = null;
+
+                    out = new PrintWriter(new BufferedWriter(new OutputStreamWriter(socket.getOutputStream())),true);
+                    in = new BufferedReader(new InputStreamReader(socket.getInputStream()));
 
                     out.println(msgToSend);
-                    String numberAsString = in.readLine();
-
-                    Log.d(TAG,"numberAsString 222222222222 >>> " +numberAsString + "<<<-----");
+                    numberAsString = in.readLine();
 
                     if (numberAsString == null) {
-
-                        Log.d(TAG,"numberAsString 3333333333");
-
-                        Log.d(TAG, "doInBackground: null pointer exception " + REMOTE_PORTS.get(i));
+                        Log.d(TAG, "NullPointerException with REMOET_PORT: " + REMOTE_PORTS.get(i));
+                        if (force_closed == false) {
+                            force_closed = true;
+                            force_close_id = REMOTE_PORTS.get(i);
+                        }
+                        else {
+                            Log.d(TAG, "Already force closed with PORT " + force_close_id);
+                        }
                         handleIOException(msgToSend, i, proposal_numbers);
                         return null;
                     }
 
-                    Log.d(TAG,"proposal_number 666666666");
                     double proposal_number = Double.parseDouble(numberAsString);
                     proposal_numbers[i] = proposal_number;
 
-
-                    try {
-                        //if()
-
-
-                        socket.close();
-                    }catch(IOException e) {
-                        System.out.println(" socket.close :>>>>>>>>>" + e.getMessage());
-                    }
+                    socket.close();
 
                 }
 
@@ -425,6 +435,9 @@ public class GroupMessengerActivity extends Activity implements View.OnClickList
                 agreedMessage = agreedMessage +  "###" + Double.toString(max_pn) + "###" + myPort;
 
                 for (int j = 0; j < REMOTE_PORTS.size(); j++) {
+                    if (force_closed && force_close_id.equals(REMOTE_PORTS.get(j))) {
+                        continue;
+                    }
                     Socket socket2 = new Socket(InetAddress.getByAddress(new byte[]{10, 0, 2, 2}),
                             Integer.parseInt(REMOTE_PORTS.get(j)));
 
@@ -434,14 +447,19 @@ public class GroupMessengerActivity extends Activity implements View.OnClickList
                 }
             }
             catch (UnknownHostException e) {
-                System.out.println("UnknownHostException >>>>>>> :" + e.getMessage());
-
                 Log.e(TAG, "ClientTask UnknownHostException");
             }
             catch (IOException e) {
-                System.out.println("IOException  >>>>>> :" + e.getMessage());
-                Log.d(TAG, "doInBackground: IO Exception");
+                Log.d(TAG, "doInBackground: IO Exception with REMOTE_PORT: " + REMOTE_PORTS.get(i));
+                if (force_closed == false) {
+                    force_closed = true;
+                    force_close_id = REMOTE_PORTS.get(i);
+                }
+                else {
+                    Log.d(TAG, "Already force closed with PORT " + force_close_id);
+                }
                 handleIOException(msgToSend, i, proposal_numbers);
+                return null;
             }
 
             return null;
