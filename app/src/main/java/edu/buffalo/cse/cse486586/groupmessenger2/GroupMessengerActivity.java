@@ -170,6 +170,16 @@ public class GroupMessengerActivity extends Activity implements View.OnClickList
                     String str = in.readLine();
                     String str_split[] = str.split("###");
 
+                    if (messageQueue.size() > 0){
+                        Log.d(TAG, "Line start");
+                        Iterator qITR = messageQueue.iterator();
+                        while (qITR.hasNext()) {
+                            Message qMessage = (Message) qITR.next();
+                            Log.d(TAG, qMessage.msg + " " + qMessage.sender_port + " " + qMessage.status + " " + qMessage.proposal_number);
+                        }
+                        Log.d(TAG, "Line end");
+                    }
+
                     if (Integer.parseInt(str_split[2]) == 0) {
 
                         // Add the message to the queue
@@ -180,7 +190,7 @@ public class GroupMessengerActivity extends Activity implements View.OnClickList
                         message = new Message(str_split[0], str_split[1], proposal_number, status, sender_port);
                         messageQueue.add(message);
 
-                        // Send the proposal number back to the queue
+                        // Send the proposal number back to the sender_port
                         out.println(Double.toString(proposal_number));
                     }
                     else if (Integer.parseInt(str_split[2]) == 2) {
@@ -196,7 +206,7 @@ public class GroupMessengerActivity extends Activity implements View.OnClickList
                         // Add the new message into the queue with the correct proposal number
                         int status = 2;
                         double proposal_number = Double.parseDouble(str_split[4]);
-                        String sender_port = str_split[4];
+                        String sender_port = str_split[3];
                         message2 = new Message(str_split[0], str_split[1], proposal_number, status, sender_port);
                         messageQueue.add(message2);
 
@@ -211,7 +221,6 @@ public class GroupMessengerActivity extends Activity implements View.OnClickList
                         while (messageQueue.iterator().hasNext()){
                             message3 = messageQueue.peek();
                             if (message3 == null || message3.status != 2){
-//                                Log.d(TAG, "doInBackground: " + message3.msg + " " + message3.sender_port);
                                 break;
                             }
                             message3 = messageQueue.poll();
@@ -224,7 +233,7 @@ public class GroupMessengerActivity extends Activity implements View.OnClickList
                         String failed_port = str_split[0];
 
                         if (force_closed) {
-                            Log.d(TAG, "Already force closed with ID: " + force_close_id + "And Got ID as " + failed_port);
+                            Log.d(TAG, "Already force closed with ID: " + force_close_id + " And Got ID as " + failed_port);
                         }
                         else {
                             force_closed = true;
@@ -289,8 +298,6 @@ public class GroupMessengerActivity extends Activity implements View.OnClickList
             String failed_port = REMOTE_PORTS.get(i);
             String failed_port_msg = failed_port + "###" + getUniqueId() + "###" + 3;
 
-
-            Log.d(TAG, "doInBackground: my port info: " + myPort);
             for (int k = 0; k < REMOTE_PORTS.size(); k++) {
 
                 if (failed_port.equals(REMOTE_PORTS.get(k))) {
@@ -303,11 +310,9 @@ public class GroupMessengerActivity extends Activity implements View.OnClickList
                 PrintWriter out = new PrintWriter(new BufferedWriter(new OutputStreamWriter(socket.getOutputStream())),true);
                 out.println(failed_port_msg);
 
-                Log.d(TAG, "failed port info sent to: " + REMOTE_PORTS.get(k));
                 socket.close();
             }
 
-            Log.d(TAG, "Failed port details sent to all other processes");
 
             // Send the earlier message to the rest of the ports
             for (int l = i; l < REMOTE_PORTS.size(); l++) {
@@ -343,7 +348,7 @@ public class GroupMessengerActivity extends Activity implements View.OnClickList
             String msg_split[] = msgToSend.split("###");
             msg_split[2] = "2";
             String agreedMessage = TextUtils.join("###", msg_split);
-            agreedMessage = agreedMessage +  "###" + Double.toString(max_pn) + "###" + myPort;
+            agreedMessage = agreedMessage +  "###" + Double.toString(max_pn);
 
             for (int n = 0; n < REMOTE_PORTS.size(); n++) {
 
@@ -358,8 +363,6 @@ public class GroupMessengerActivity extends Activity implements View.OnClickList
                 out.println(agreedMessage);
                 socket.close();
             }
-
-            Log.d(TAG, "Earlier message has been sent to the remaining processes");
         }
         catch (IOException e2){
             Log.e(TAG, "Unable to multicast failed port details");
@@ -432,7 +435,8 @@ public class GroupMessengerActivity extends Activity implements View.OnClickList
                 String msg_split[] = msgToSend.split("###");
                 msg_split[2] = "2";
                 String agreedMessage = TextUtils.join("###", msg_split);
-                agreedMessage = agreedMessage +  "###" + Double.toString(max_pn) + "###" + myPort;
+                agreedMessage = agreedMessage +  "###" + Double.toString(max_pn);
+
 
                 for (int j = 0; j < REMOTE_PORTS.size(); j++) {
                     if (force_closed && force_close_id.equals(REMOTE_PORTS.get(j))) {
